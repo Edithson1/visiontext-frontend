@@ -1,0 +1,45 @@
+name: CI
+
+# No corre en push ni en PR: los push solo suben código.
+# Lo ejecuta deploy.yml al publicar un tag, para que nunca se despliegue un commit
+# que no pase estas verificaciones. También se puede lanzar a mano desde Actions.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Lint, build e imagen
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Build (incluye chequeo de tipos)
+        run: npm run build
+        env:
+          VITE_API_URL: https://backend.example.com
+
+      # Se construye la misma imagen que construirá Railway y se comprueba que sirve la app
+      - name: Construir imagen Docker de producción
+        run: docker build --build-arg VITE_API_URL=https://backend.example.com -t visiontext-frontend:ci .
+
+      - name: Smoke test de nginx (incluye rutas de React Router)
+        run: |
+          docker run -d --name web -e PORT=8080 -p 8080:8080 visiontext-frontend:ci
+          for i in $(seq 1 20); do curl -fs http://localhost:8080/ > /dev/null && break; sleep 1; done
+          curl -fs http://localhost:8080/ | grep -q '<div id="root">'
+          curl -fs http://localhost:8080/admin | grep -q '<div id="root">'
+          docker rm -f web
