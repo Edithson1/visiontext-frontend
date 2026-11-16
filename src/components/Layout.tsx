@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Search, Image, Upload, Menu, X, Shield, Sparkles } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { useLocation, useNavigate } from 'react-router-dom';
+import DownloadApp from './DownloadApp';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -118,6 +119,7 @@ export default function Layout({ children }: LayoutProps) {
 
       {/* Main Content */}
       <main className="flex-grow pt-24 pb-12 px-4 sm:px-6 lg:px-8 max-w-7xl mx-auto w-full">
+        <DownloadApp />
         <div className="fade-in">
           {children}
         </div>

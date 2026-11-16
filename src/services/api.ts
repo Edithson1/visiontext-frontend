@@ -11,6 +11,26 @@ const api = axios.create({
   timeout: API_TIMEOUT_MS,
 });
 
+// Public download: do not send an administrator's token to retrieve the APK.
+export const downloadAndroidApp = async (): Promise<Blob> => {
+  try {
+    const response = await axios.get<Blob>(`${API_BASE_URL}/api/app/download`, {
+      responseType: 'blob', timeout: API_TIMEOUT_MS,
+    });
+    if (!response.data.size || !response.headers['content-type']?.includes('application/vnd.android.package-archive')) {
+      throw new Error('El servidor no entregó una APK válida. Intenta de nuevo más tarde.');
+    }
+    return response.data;
+  } catch (error) {
+    if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
+      let detail: unknown;
+      try { detail = JSON.parse(await error.response.data.text()).detail; } catch { /* Non-JSON upstream error. */ }
+      if (typeof detail === 'string') throw new Error(detail);
+    }
+    throw new Error(getErrorDetail(error, 'No se pudo descargar la app. Intenta de nuevo más tarde.'));
+  }
+};
+
 // ==================== AUTH ====================
 
 export const getAdminToken = (): string | null => localStorage.getItem(ADMIN_TOKEN_KEY);
