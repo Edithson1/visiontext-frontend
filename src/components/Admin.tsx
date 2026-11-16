@@ -1,12 +1,16 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Trash2, Loader2, AlertCircle, LogOut } from 'lucide-react';
-import { getAllImagesAdmin, deleteImageAdmin, getAdminToken, clearAdminToken, isUnauthorized, getErrorDetail } from '../services/api';
+import { getImagesAdmin, deleteImageAdmin, getAdminToken, clearAdminToken, isUnauthorized, getErrorDetail } from '../services/api';
 import AdminLogin from './AdminLogin';
 import type { AdminImage } from '../types';
+
+const PAGE_SIZE = 30;
 
 export default function Admin() {
     const [isAuthenticated, setIsAuthenticated] = useState(() => getAdminToken() !== null);
     const [images, setImages] = useState<AdminImage[]>([]);
+    const [page, setPage] = useState(0);
+    const [total, setTotal] = useState(0);
     const [loading, setLoading] = useState(false);
     const [deleting, setDeleting] = useState<string | null>(null);
     const [error, setError] = useState<string | null>(null);
@@ -16,31 +20,43 @@ export default function Admin() {
         clearAdminToken();
         setIsAuthenticated(false);
         setImages([]);
+        setPage(0);
+        setTotal(0);
     }, []);
 
-    const loadImages = useCallback(async () => {
+    const loadImages = useCallback(async (signal?: AbortSignal) => {
         setLoading(true);
         setError(null);
 
         try {
-            const data = await getAllImagesAdmin();
-            setImages(data.images);
+            const data = await getImagesAdmin(PAGE_SIZE, page * PAGE_SIZE, signal);
+            if (signal?.aborted) return;
+            setTotal(data.total);
+            const lastPage = Math.max(0, Math.ceil(data.total / PAGE_SIZE) - 1);
+            if (page > lastPage) {
+                setImages([]);
+                setPage(lastPage);
+            } else {
+                setImages(data.images);
+            }
         } catch (err) {
+            if (signal?.aborted) return;
             if (isUnauthorized(err)) {
                 // Token inválido o expirado, cerrar sesión
                 handleLogout();
             } else {
-                setError('Error al cargar imágenes');
+                setError(getErrorDetail(err, 'Error al cargar imágenes'));
             }
         } finally {
-            setLoading(false);
+            if (!signal?.aborted) setLoading(false);
         }
-    }, [handleLogout]);
+    }, [handleLogout, page]);
 
     useEffect(() => {
-        if (isAuthenticated) {
-            loadImages();
-        }
+        if (!isAuthenticated) return;
+        const controller = new AbortController();
+        void loadImages(controller.signal);
+        return () => controller.abort();
     }, [isAuthenticated, loadImages]);
 
     const handleDelete = async (imageId: string) => {
@@ -49,8 +65,8 @@ export default function Admin() {
 
         try {
             await deleteImageAdmin(imageId);
-            setImages(current => current.filter(img => img.id !== imageId));
             setDeleteConfirm(null);
+            await loadImages();
         } catch (err) {
             if (isUnauthorized(err)) {
                 handleLogout();
@@ -110,7 +126,7 @@ export default function Admin() {
             ) : (
                 <div className="space-y-4">
                     <h3 className="text-xl font-semibold text-gray-900">
-                        Imágenes del Sistema ({images.length})
+                        Imágenes del Sistema ({total})
                     </h3>
 
                     {/* Images Table */}
@@ -143,6 +159,7 @@ export default function Admin() {
                                                 <img
                                                     src={image.thumbnail_url}
                                                     alt={image.filename}
+                                                    loading="lazy"
                                                     className="w-16 h-16 object-cover rounded"
                                                 />
                                             </td>
@@ -193,6 +210,22 @@ export default function Admin() {
                 </div>
             )}
 
+            {total > 0 && (
+                <nav aria-label="Paginación de imágenes" className="flex flex-wrap items-center justify-between gap-3">
+                    <p className="text-sm text-gray-600" aria-live="polite">
+                        Página {page + 1} de {Math.max(1, Math.ceil(total / PAGE_SIZE))} · {total} imágenes
+                    </p>
+                    <div className="flex gap-2">
+                        <button type="button" onClick={() => setPage(current => current - 1)}
+                            disabled={page === 0 || loading || deleting !== null}
+                            className="rounded-md border px-4 py-2 disabled:opacity-40">Anterior</button>
+                        <button type="button" onClick={() => setPage(current => current + 1)}
+                            disabled={(page + 1) * PAGE_SIZE >= total || loading || deleting !== null}
+                            className="rounded-md border px-4 py-2 disabled:opacity-40">Siguiente</button>
+                    </div>
+                </nav>
+            )}
+
             {deleteConfirm && (
                 <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
                     <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
@@ -203,9 +236,9 @@ export default function Admin() {
                             ¿Estás seguro de que deseas eliminar esta imagen? Esta acción eliminará:
                         </p>
                         <ul className="text-sm text-gray-600 mb-6 space-y-1">
-                            <li>• Registro en PostgreSQL</li>
-                            <li>• Imagen y thumbnail en MinIO</li>
-                            <li>• Vector en índice FAISS</li>
+                            <li>• Registro del catálogo</li>
+                            <li>• Imagen original y miniatura</li>
+                            <li>• Datos del índice de búsqueda</li>
                         </ul>
                         <div className="flex space-x-3">
                             <button

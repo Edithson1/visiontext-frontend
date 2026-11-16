@@ -2,6 +2,9 @@
 
 Interfaz de VisionText AI (React 19 + TypeScript + Vite + Tailwind). Búsqueda de imágenes por texto o por imagen, subida con validación CLIP y panel de administración.
 
+Admin consulta 30 registros por página y permite recorrer todo el catálogo con
+Anterior/Siguiente. Las miniaturas se cargan conforme entran en pantalla.
+
 ## Desarrollo
 
 ```bash

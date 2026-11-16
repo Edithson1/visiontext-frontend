@@ -104,8 +104,8 @@ export const adminLogin = async (username: string, password: string): Promise<{ 
   return response.data;
 };
 
-export const getAllImagesAdmin = async (): Promise<{ images: AdminImage[]; total: number }> => {
-  const response = await api.get('/api/admin/images');
+export const getImagesAdmin = async (limit = 30, offset = 0, signal?: AbortSignal): Promise<{ images: AdminImage[]; total: number }> => {
+  const response = await api.get('/api/admin/images', { params: { limit, offset }, signal });
   return response.data;
 };
 
