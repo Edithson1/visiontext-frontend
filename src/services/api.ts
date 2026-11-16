@@ -25,8 +25,12 @@ export const downloadAndroidApp = async (): Promise<Blob> => {
     if (axios.isAxiosError(error) && error.response?.data instanceof Blob) {
       let detail: unknown;
       try { detail = JSON.parse(await error.response.data.text()).detail; } catch { /* Non-JSON upstream error. */ }
+      if (error.response.status === 404 && (!detail || detail === 'Not Found')) {
+        throw new Error('La app todavía no está disponible para descargar. Intenta de nuevo más tarde.');
+      }
       if (typeof detail === 'string') throw new Error(detail);
     }
+    if (error instanceof Error && !axios.isAxiosError(error)) throw error;
     throw new Error(getErrorDetail(error, 'No se pudo descargar la app. Intenta de nuevo más tarde.'));
   }
 };
